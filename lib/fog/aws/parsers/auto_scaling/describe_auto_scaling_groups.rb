@@ -6,12 +6,17 @@ module Fog
         class DescribeAutoScalingGroups < Fog::Parsers::Base
 
           def reset
+            reset_state
             reset_auto_scaling_group
             reset_enabled_metric
             reset_instance
             reset_suspended_process
             @results = { 'AutoScalingGroups' => [] }
             @response = { 'DescribeAutoScalingGroupsResult' => {}, 'ResponseMetadata' => {} }
+          end
+
+          def reset_state
+            @state = Array.new
           end
 
           def reset_auto_scaling_group
@@ -30,8 +35,21 @@ module Fog
             @suspended_process = {}
           end
 
+          def current_context
+            @state.size >= 2 ? @state[-2] : nil
+          end
+
+          def push_state(state)
+            @state.push(state)
+          end
+
+          def pop_state
+            @state.pop
+          end
+
           def start_element(name, attrs = [])
             super
+            push_state(name)
             case name
             when 'AvailabilityZones'
               @in_availability_zones = true
@@ -62,7 +80,7 @@ module Fog
               elsif @in_suspended_processes
                 @auto_scaling_group['SuspendedProcesses'] << @suspended_process
                 reset_suspended_process
-              elsif !@in_instances && !@in_policies
+              elsif current_context == 'AutoScalingGroups'
                 @results['AutoScalingGroups'] << @auto_scaling_group
                 reset_auto_scaling_group
               end
@@ -117,6 +135,7 @@ module Fog
             when 'DescribeAutoScalingGroupsResponse'
               @response['DescribeAutoScalingGroupsResult'] = @results
             end
+            pop_state
           end
 
         end
